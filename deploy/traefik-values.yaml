@@ -1,0 +1,24 @@
+deployment:
+  kind: DaemonSet
+  nodeSelector:
+    ingress-ready: "true"
+
+providers:
+  kubernetesIngress:
+    enabled: true
+    ingressClass: traefik
+
+ingressClass:
+  enabled: true
+  isDefaultClass: true
+
+ports:
+  web:
+    hostPort: 80
+    exposedPort: 80
+  websecure:
+    hostPort: 443
+    exposedPort: 443
+
+service:
+  type: ClusterIP

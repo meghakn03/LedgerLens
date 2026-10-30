@@ -1,0 +1,10 @@
+.git
+.github
+.terraform
+node_modules
+dist
+terraform/kubeconfig
+terraform/terraform.tfstate*
+__pycache__
+*.pyc
+.DS_Store

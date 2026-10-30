@@ -1,0 +1,9 @@
+node_modules/
+dist/
+__pycache__/
+.terraform/
+*.tfstate
+*.tfstate.*
+kubeconfig
+terraform/kubeconfig
+.DS_Store

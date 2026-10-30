@@ -1,0 +1,115 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ledgerlens
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ledgerlens-config
+  namespace: ledgerlens
+data:
+  LEDGERLENS_DEMO_MODE: "true"
+  LOG_LEVEL: "info"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ledgerlens-api
+  namespace: ledgerlens
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: ledgerlens-api }
+  template:
+    metadata:
+      labels: { app: ledgerlens-api }
+    spec:
+      containers:
+        - name: api
+          image: ledgerlens-api:local
+          imagePullPolicy: IfNotPresent
+          ports: [{ name: http, containerPort: 8000 }]
+          envFrom: [{ configMapRef: { name: ledgerlens-config } }]
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 8
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 96Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, runAsNonRoot: true }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ledgerlens-api
+  namespace: ledgerlens
+spec:
+  selector: { app: ledgerlens-api }
+  ports: [{ name: http, port: 8000, targetPort: http }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ledgerlens-web
+  namespace: ledgerlens
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: ledgerlens-web }
+  template:
+    metadata:
+      labels: { app: ledgerlens-web }
+    spec:
+      containers:
+        - name: web
+          image: ledgerlens-web:local
+          imagePullPolicy: IfNotPresent
+          ports: [{ name: http, containerPort: 8080 }]
+          readinessProbe:
+            httpGet: { path: /, port: http }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /, port: http }
+            initialDelaySeconds: 8
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 50m, memory: 32Mi }
+            limits: { cpu: 300m, memory: 128Mi }
+          securityContext: { allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 101 }
+          volumeMounts:
+            - { name: nginx-runtime, mountPath: /var/cache/nginx }
+            - { name: nginx-run, mountPath: /var/run }
+      volumes:
+        - { name: nginx-runtime, emptyDir: {} }
+        - { name: nginx-run, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ledgerlens-web
+  namespace: ledgerlens
+spec:
+  selector: { app: ledgerlens-web }
+  ports: [{ name: http, port: 80, targetPort: http }]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ledgerlens
+  namespace: ledgerlens
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: ledgerlens-web, port: { number: 80 } }
