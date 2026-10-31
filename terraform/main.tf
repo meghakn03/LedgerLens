@@ -47,7 +47,11 @@ resource "kind_cluster" "ledgerlens" {
 # The provisioner keeps this in the same local-only Terraform workflow without
 # requiring Kubernetes provider configuration during the cluster's first plan.
 resource "terraform_data" "ingress_traefik" {
-  triggers_replace = [kind_cluster.ledgerlens.id, kind_cluster.ledgerlens.kubeconfig_path]
+  triggers_replace = [
+    kind_cluster.ledgerlens.id,
+    kind_cluster.ledgerlens.kubeconfig_path,
+    filesha256("${path.module}/../deploy/traefik-values.yaml"),
+  ]
 
   provisioner "local-exec" {
     interpreter = ["/bin/sh", "-c"]
@@ -62,6 +66,12 @@ resource "terraform_data" "ingress_traefik" {
         --wait --timeout 180s
     EOT
   }
+
+}
+
+resource "terraform_data" "kubeconfig_cleanup" {
+  triggers_replace = [kind_cluster.ledgerlens.id, kind_cluster.ledgerlens.kubeconfig_path]
+  depends_on       = [terraform_data.ingress_traefik]
 
   provisioner "local-exec" {
     when        = destroy

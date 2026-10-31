@@ -11,6 +11,7 @@ providers:
 ingressClass:
   enabled: true
   isDefaultClass: true
+  name: traefik
 
 ports:
   web:
@@ -21,4 +22,5 @@ ports:
     exposedPort: 443
 
 service:
-  type: ClusterIP
+  spec:
+    type: ClusterIP
