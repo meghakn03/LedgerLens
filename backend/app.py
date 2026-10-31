@@ -3,9 +3,12 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import datetime, timezone
+import json
+import logging
+from time import perf_counter
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel, Field
 
 RULES = [
@@ -14,6 +17,23 @@ RULES = [
 ]
 
 app = FastAPI(title="LedgerLens Demo API", version="0.2.0")
+logger = logging.getLogger("ledgerlens.http")
+request_metrics: dict[tuple[str, str], int] = {}
+
+
+@app.middleware("http")
+async def observe_requests(request, call_next):
+    started = perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        logger.exception(json.dumps({"event": "http_request", "method": request.method, "path": request.url.path, "status": 500}))
+        raise
+    elapsed = perf_counter() - started
+    key = (request.method, str(response.status_code))
+    request_metrics[key] = request_metrics.get(key, 0) + 1
+    logger.info(json.dumps({"event": "http_request", "method": request.method, "path": request.url.path, "status": response.status_code, "duration_seconds": round(elapsed, 4)}))
+    return response
 
 today_label = datetime.now().astimezone().strftime("Today, %b %d").replace(" 0", " ")
 seeded_transactions = [
@@ -64,6 +84,24 @@ class ReviewNote(BaseModel):
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "ledgerlens-api", "timestamp": datetime.now(timezone.utc).isoformat(), "synthetic": True}
+
+
+@app.get("/health/live")
+def liveness():
+    return {"status": "ok"}
+
+
+@app.get("/health/ready")
+def readiness():
+    return {"status": "ok", "synthetic": True}
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics():
+    lines = ["# HELP ledgerlens_http_requests_total HTTP requests handled by the API.", "# TYPE ledgerlens_http_requests_total counter"]
+    for (method, status), count in sorted(request_metrics.items()):
+        lines.append(f'ledgerlens_http_requests_total{{method="{method}",status="{status}"}} {count}')
+    return Response(content="\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")
 
 
 @app.get("/api/transactions")

@@ -2,23 +2,33 @@
 
 LedgerLens is a local-first fintech operations demo for reviewing synthetic card transactions. It does not connect to banking services, move money, or use real customer data. API review notes live in memory and reset when the API restarts.
 
-## Quick start: local Kubernetes
+## One-command local setup
 
-Requirements: Docker Desktop, Terraform 1.5+, kind, kubectl, and Helm 3.
+From the repository root, with Docker Desktop, Terraform 1.5+, kind, kubectl, and Helm 3 installed, run:
 
 ```sh
 ./scripts/up.sh
 ```
 
-The script provisions a local kind cluster and Traefik Ingress with Terraform, builds and loads the web and API images, applies the Kubernetes manifests, and waits for both deployments. Open **http://localhost:8081**.
+The script checks the required tools and Docker, provisions a local kind cluster and Traefik Ingress with Terraform, builds and loads versioned web and API images, applies the Kubernetes manifests, and waits for both deployments. Open **http://localhost:8081**. Setup is safe to rerun after interrupted provisioning.
 
-To apply app changes after editing code or manifests:
+## Deploy and roll back
+
+After changing app code or Kubernetes manifests, deploy a new local revision:
 
 ```sh
 ./scripts/deploy-local.sh
 ```
 
-Remove the cluster and its local resources with:
+Each deploy uses a unique local image tag, so Kubernetes keeps a usable revision history. To revert both services to their previous deployment revision:
+
+```sh
+./scripts/rollback-local.sh
+```
+
+Check rollout history with `kubectl --kubeconfig terraform/kubeconfig -n ledgerlens rollout history deployment/ledgerlens-api` (replace `ledgerlens-api` with `ledgerlens-web` to inspect the dashboard). Rollback requires a previous successful deployment. The demo API stores reviewer notes in memory, so notes reset when the API pod is replaced or rolled back.
+
+To remove the cluster and its local resources:
 
 ```sh
 ./scripts/down.sh
@@ -47,7 +57,24 @@ npm run dev
 
 Open the Vite URL printed in the terminal. Vite proxies API requests to `localhost:8000`. With the API stopped, the dashboard uses its built-in synthetic seed data.
 
-The API provides `/health`, `/api/transactions`, `/api/rules`, and `POST /api/transactions/{id}/review`. Review requests accept `{"note":"Confirmed for the demo."}`. The rules engine flags purchases of $1,000 or more and 4+ transactions in 10 minutes.
+The API provides `/health`, `/health/live`, `/health/ready`, `/metrics`, `/api/transactions`, `/api/rules`, and `POST /api/transactions/{id}/review`. Review requests accept `{"note":"Confirmed for the demo."}`. The rules engine flags purchases of $1,000 or more and 4+ transactions in 10 minutes.
+
+## Health and observability
+
+Kubernetes checks API liveness at `/health/live`, API readiness at `/health/ready`, and web health at `/healthz`; unhealthy containers are restarted or kept out of service. The API writes one JSON request log per request to stdout and exposes a Prometheus text counter at `/metrics`. These counters are process-local demo metrics and reset when the API restarts.
+
+Quick status check (deployment and pod state, dashboard health, API health, and metrics):
+
+```sh
+./scripts/status-local.sh
+```
+
+Follow API or web logs:
+
+```sh
+./scripts/logs-local.sh api
+./scripts/logs-local.sh web
+```
 
 ## Run with Docker Compose
 
@@ -59,4 +86,4 @@ Open the dashboard at **http://localhost:8080**. The API is available at **http:
 
 ## CI
 
-GitHub Actions builds the frontend, runs backend rule and API tests, validates Terraform formatting and configuration, checks Kubernetes manifests against their schemas, and builds both container images. It does not publish images or deploy to a remote cluster.
+GitHub Actions runs on every push and pull request, and can be started from the repository's **Actions → CI → Run workflow** page. It builds the frontend, runs backend tests, validates Terraform formatting and configuration, checks Kubernetes manifests against their schemas, and builds both container images. CI does not publish images or deploy to a remote cluster.
