@@ -1,3 +1,5 @@
+**Tech stack:** Python, FastAPI, React, Vite, Terraform, Kubernetes, Helm, Docker, GitHub Actions
+
 # LedgerLens
 
 LedgerLens is a local-first fintech operations demo for reviewing synthetic card transactions. It does not connect to banking services, move money, or use real customer data. API review notes live in memory and reset when the API restarts.
